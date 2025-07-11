@@ -1,0 +1,47 @@
+#ignore the following files for git
+
+# === Python-specific ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+
+# === Virtual Environments ===
+venv/
+.venv/
+
+
+# === Environment Variables / Secrets ===
+.env
+*.env
+
+# == Editor / IDE Config ===
+.vscode/
+.idea/
+
+# === Logs / Caches ===
+*.log
+*.bak
+*.swp
+.cache/
+*.tmp
+
+# === Node / Fronend Build ===
+node_modules/
+dist/
+build/
+
+# === Model Checkpoints (future-proofing) ===
+*.pt
+*.ckpt
+*.bin
+
+# === VS Code Notebooks / Checkpoints ===
+.ipynb_checkpoints/
+
+
+# === Personal Files ===
+*.docx
+*.pdf
+*.xlsx
