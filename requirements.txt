@@ -1,0 +1,42 @@
+# ========================
+# Kai / Eden LLM Backend
+# ========================
+
+# Core LLM stack (CUDA 11.8 build)
+#--index-url https://download.pytorch.org/whl/cu118
+
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+torchaudio==2.7.1+cu118
+
+# Transformers and inference
+transformers>=4.40.0
+accelerate>=0.29.0
+bitsandbytes>=0.43.1         # 4-bit / 8-bit quantization
+
+# ========================
+# Web and API Layer
+# ========================
+fastapi>=0.100.0
+uvicorn>=0.29.0
+pydantic>=2.7.0
+
+# ========================
+# Emotional Intelligence Stack
+# ========================
+vaderSentiment>=3.3.2        # affect vector sentiment detection
+python-dotenv>=1.0.1         # loads .env variables (e.g. HF_TOKEN)
+
+# ========================
+# Optional: Debugging and Analytics
+# ========================
+loguru>=0.7.2                # structured logging (optional)
+rich>=13.7.0                 # pretty console output (optional)
+httpx>=0.27.0                # async test client for FastAPI (optional)
+pandas>=2.2.2                # trust score analytics, session metrics (optional)
+
+# ========================
+# Optional: Auth and File Uploads
+# ========================
+python-multipart             # FastAPI file uploads
+passlib[bcrypt]              # password hashing for future auth support

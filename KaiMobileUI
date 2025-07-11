@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kai</title>
+  <link rel="stylesheet" href="css/styleapp.css" />
+</head>
+<body>
+  <div id="kai-container">
+    <div id="header">
+      <img src="assets/logo.svg" alt="Kai Logo" id="kai-logo" />
+    </div>
+
+    <div id="welcome-screen">
+      <p class="intro-text">Hi, I’m Kai.</p>
+      <p class="sub-text">You don’t need to say everything perfectly — I’m just here with you.</p>
+    </div>
+
+    <div id="chat-box" class="hidden">
+      <div id="messages"></div>
+      <form id="chat-form">
+        <input type="text" id="user-input" placeholder="Say anything…" autocomplete="off" />
+        <button type="submit">→</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/chat.js"></script>
+</body>
+</html>
