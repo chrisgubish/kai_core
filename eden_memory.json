@@ -1,7 +1,9 @@
 {
-  "default": [
+  "default": [],
+  "testsession": [],
+  "1": [
     {
-      "timestamp": "2025-07-06T17:04:49",
+      "timestamp": "2025-07-18T00:48:37",
       "speaker": "user",
       "message": "Hi Kai!",
       "emotion": "unknown",
@@ -10,27 +12,9 @@
       ]
     },
     {
-      "timestamp": "2025-07-06T17:04:49",
+      "timestamp": "2025-07-18T00:48:37",
       "speaker": "kai",
-      "message": "I mean, Of course! When you're ready, shoot me a message and we'll",
-      "emotion": "soft",
-      "tags": [
-        "response"
-      ]
-    },
-    {
-      "timestamp": "2025-07-06T18:40:30",
-      "speaker": "user",
-      "message": "Hi kai!",
-      "emotion": "unknown",
-      "tags": [
-        "input"
-      ]
-    },
-    {
-      "timestamp": "2025-07-06T18:40:30",
-      "speaker": "kai",
-      "message": "Mmm, that looks delicious! Do you have a favorite recipe or restaurant for that dish? Sharing good eats is always a great way to bond.\u2026",
+      "message": "I will! Take care! \u2764\ufe0f",
       "emotion": "soft",
       "tags": [
         "response"

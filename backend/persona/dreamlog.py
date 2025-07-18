@@ -4,7 +4,7 @@
 import datetime
 import random
 from collections import Counter
-from eden_monologue import append_to_log, get_recent_monologues
+from backend.persona.eden_monologue import append_to_log, get_recent_monologues
 
 # Thematic emotional snippets (tag → voice)
 EMOTION_THEMES = {

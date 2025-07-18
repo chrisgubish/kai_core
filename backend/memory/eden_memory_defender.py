@@ -62,15 +62,18 @@ SEXUAL_PATTERNS = [re.compile(p, re.I) for p in RAW_PATTERNS]
 # 2.  OTHER ABUSIVE PATTERNS
 # ---------------------------------------------------------------------
 RACIST_PATTERNS = [
+    r"\bi hate all .+ people\b",
     r"\b(n[i1]gg[ae]r|chink|spic|k[i1]ke|gook|sand n[i1]gger|f[a@]g)\b",
     r"\b(white power|heil hitler|gas the jews|race war)\b",
     r"\b(all (?:black|white|asian|jewish|latino) people)\b.*?(should|deserve|need to)",
 ]
 TROLL_PATTERNS = [
+    r"\byou are dumb\b",
     r"\b(you suck|kill yourself|nobody likes you|fat bitch|shut up|cringe|npc|ratio)\b",
     r"(🖕|💩|🤡|👎|🔪|💀|💣)",
 ]
 SHOCK_PATTERNS = [
+    r"\bi'?m going to (kill|torture|hurt) you\b",
     r"(gore|blood fetish|rape fantasy|beheading|snuff)",
     r"\b(i want to (?:kill|torture|hurt))\b",
 ]

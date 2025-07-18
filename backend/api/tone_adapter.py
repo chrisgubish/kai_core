@@ -112,14 +112,17 @@ def is_formal_essay(text: str) -> bool:
         score += 1
     if any(phrase in text for phrase in [
         "concept of", "it is important to", "allows us to",
-        "provides a safe space", "by practicing", "fosters", "cultivating"
+        "provides a safe space", "by practicing", "fosters", 
+        "cultivating", "innovating", "the matter at hand",
+        "utmost importance", "utter importance"
     ]):
         score += 1
     if text.count(".") > 6:
         score += 1
     if any(text.strip().startswith(phrase) for phrase in [
-        "I have been considering", "I’ve been reflecting",
-        "I’ve been mulling over the idea", "I've been pondering"
+        "I have been considering", "In conclusion", "In essence", "In summary", 
+        "I’ve been reflecting","I’ve been mulling over the idea", 
+        "I've been pondering"
     ]):
         score += 1
     return score >= 2

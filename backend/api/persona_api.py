@@ -43,7 +43,7 @@ from backend.inference.affect import Affect_State
 from backend.memory.memory_store import Memory_Store
 from .emotion_weights import get_emotion_weights
 from .tone_adapter import friendify, force_casual, is_formal_essay
-from scheduler import run_scheduler, stop_scheduler
+from backend.persona.scheduler import run_scheduler, stop_scheduler
 
 from backend.memory.eden_memory_defender import (
     is_sexualized_prompt,
@@ -53,8 +53,8 @@ from backend.memory.eden_memory_defender import (
 )
 
 #  Persona builders (separate modules)
-from kai_persona import build_prompt as build_kai_prompt
-from eden_persona import build_prompt as build_eden_prompt  # you will extract Eden here
+from backend.persona.kai_persona import build_prompt as build_kai_prompt
+from backend.persona.eden_persona import build_prompt as build_eden_prompt  # you will extract Eden here
 
 # ---------------------------------------------------------------------------
 # Environment + FastAPI init
@@ -79,7 +79,7 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 STATIC_DIR = BASE_DIR / "frontend" / "static"
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+#app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ---------------------------------------------------------------------------
 # Shared state
@@ -177,12 +177,14 @@ async def chat(req: ChatRequest):
     persona_key = (req.persona or "eden").lower()
 
     #load persona config
-    cfg = PERSONAS[persona_key]
+    cfg = PERSONAS.get(persona_key)
+    if cfg is None:
+        return {"error": f"Unknown persona: {persona_key}"}
     build_prompt: Callable[[str, str], str] = cfg["builder"]  # type: ignore
     speaker: str = cfg["speaker"]  # eden | kai
     tone_default: str = cfg["default_tone"]
     temp: float = cfg["temperature"]
-
+    
     #Assign session ids or uses default if none selected
     session = req.session_id or DEFAULT_SESSION
     #strips any accidental Eden or Kai prefixes in user message, feels more natural
@@ -323,7 +325,7 @@ async def shutdown_event():
 @app.get("/dreamlog")
 async def get_dreamlog(n: int = 5):
     try:
-        from eden_monologue import get_recent_monologues
+        from backend.persona.eden_monologue import get_recent_monologues
         logs = get_recent_monologues(n)
         return {"logs": logs}
     except Exception as e:
