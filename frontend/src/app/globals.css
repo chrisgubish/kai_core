@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.dark-mode {
+  --background: #0a0a0a !important;
+  --foreground: #ededed !important;
+}
+
+.dark-mode #memory {
+  color: #ededed !important;
+  background: #1f2937 !important;
+}
+
+.dark-mode input,
+.dark-mode select {
+  color: #ededed !important;
+  background: #374151 !important;
+  border: 1px solid #444 !important;
+}
+
+.dark-mode #controls {
+  background: #1f2937 !important;
+}

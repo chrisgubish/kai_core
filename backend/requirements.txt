@@ -3,16 +3,15 @@
 # ========================
 
 # Core LLM stack (CUDA 11.8 build)
+# Use python 3.11; PyTorch does not publish 3.13 Linux wheels yet.
 #--index-url https://download.pytorch.org/whl/cu118
 
-torch==2.7.1+cu118
-torchvision==0.22.1+cu118
-torchaudio==2.7.1+cu118
+torch==2.7.1
+torchvision==0.22.1
+torchaudio==2.7.1
 
 # Transformers and inference
 transformers>=4.40.0
-sentence-transformers>=2.2.0
-chromadb>=0.4.0
 accelerate>=0.29.0
 bitsandbytes>=0.43.1         # 4-bit / 8-bit quantization
 
