@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-// Avatar mapping by persona
+// Updated AVATAR_MAP with correct paths
 const AVATAR_MAP = {
-  kai: "/penguin_avatar.png",
-  eden: "/samoyed_avatar.png",
+  samoyed: "/samoyed_avatar.png",
+  penguin: "/penguin_avatar.png",
+  capybara: "/capybara_avatar.png",
+  axolotl: "/axolotl_avatar.png",  // Fixed typo: was "axolotle"
+  bat: "/bat_avatar.png"
 };
 
 export default function ChatWindow() {
@@ -19,6 +22,7 @@ export default function ChatWindow() {
   const [memory, setMemory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [selectedAvatar, setSelectedAvatar] = useState('penguin'); // MOVED INSIDE COMPONENT
 
   /* ---------- LOAD CACHED DATA ---------- */
   useEffect(() => {
@@ -35,8 +39,13 @@ export default function ChatWindow() {
     const lastSession = localStorage.getItem("lastSessionId");
     if (lastSession) setSessionId(lastSession);
     
+    // Load selected avatar
+    const savedAvatar = localStorage.getItem("selectedAvatar");
+    if (savedAvatar && AVATAR_MAP[savedAvatar]) {
+      setSelectedAvatar(savedAvatar);
+    }
+    
     // Load cached messages ONLY if backend memory exists
-    // This prevents showing stale chats when backend memory is cleared
     loadMemory().then(() => {
       const cache = JSON.parse(localStorage.getItem("kaiChatCache") || "[]");
       if (cache.length > 0 && memory.length > 0) {
@@ -60,6 +69,12 @@ export default function ChatWindow() {
     if (typeof window === "undefined") return;
     localStorage.setItem("lastSessionId", sessionId);
   }, [sessionId]);
+
+  // Save selected avatar to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("selectedAvatar", selectedAvatar);
+  }, [selectedAvatar]);
 
   /* ---------- LOAD MEMORY ---------- */
   useEffect(() => {
@@ -100,7 +115,6 @@ export default function ChatWindow() {
 
     const userMessage = input.trim();
     
-    // Add user message to chat immediately (optimistic UI)
     const userMsg = { speaker: 'user', message: userMessage };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -108,20 +122,13 @@ export default function ChatWindow() {
     setConnectionStatus('sending');
 
     try {
-      console.log('Sending message:', {
-        user_input: userMessage,
-        session_id: sessionId,
-        persona: persona
-      });
-
-      // Send request matching your backend API structure
       const res = await fetch('http://127.0.0.1:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_input: userMessage,      // Backend expects 'user_input'
-          session_id: sessionId,        // Backend expects 'session_id' 
-          persona: persona              // Backend expects 'persona'
+          user_input: userMessage,
+          session_id: sessionId,
+          persona: persona
         }),
       });
 
@@ -130,29 +137,25 @@ export default function ChatWindow() {
       }
 
       const data = await res.json();
-      console.log('Backend response:', data);
 
       if (data.error) {
         throw new Error(data.error);
       }
 
-      // Add AI response to chat
       const aiMsg = {
         speaker: persona,
-        message: data.response,        // Backend returns 'response'
+        message: data.response,
         emotions: data.emotions || {}
       };
       setMessages(prev => [...prev, aiMsg]);
       setConnectionStatus('connected');
 
-      // Refresh memory log to ensure sync
       setTimeout(() => loadMemory(), 500);
 
     } catch (err) {
       console.error('sendMessage error:', err);
       setConnectionStatus('error');
       
-      // Add error message to chat
       const errorMsg = {
         speaker: 'system',
         message: `Error: ${err.message}. Check if backend is running on port 8000.`,
@@ -170,23 +173,19 @@ export default function ChatWindow() {
       const res = await fetch(`http://127.0.0.1:8000/memory/reset?session=${sessionId}`);
       if (!res.ok) throw new Error(res.statusText);
       
-      // Clear both frontend state and localStorage
       setMessages([]);
       setMemory([]);
       
-      // Clear local cache immediately
       if (typeof window !== "undefined") {
         localStorage.removeItem("kaiChatCache");
         localStorage.removeItem("lastPersona");
         localStorage.removeItem("lastSessionId");
       }
       
-      // Force reload memory to confirm it's cleared
       await loadMemory();
       
     } catch (err) {
       console.error('clearMemory error:', err);
-      // Even if backend fails, clear frontend
       setMessages([]);
       setMemory([]);
       if (typeof window !== "undefined") {
@@ -264,7 +263,6 @@ export default function ChatWindow() {
           </button>
           <button 
             onClick={() => {
-              // Generate new session ID and clear everything
               const newSessionId = `session_${Date.now()}`;
               setSessionId(newSessionId);
               setMessages([]);
@@ -333,7 +331,7 @@ export default function ChatWindow() {
           const isEden = personaKey === 'eden';
           const isUser = personaKey === 'user';
           const isSystem = personaKey === 'system';
-          const avatarSrc = isKai ? AVATAR_MAP.kai : isEden ? AVATAR_MAP.eden : null;
+          const avatarSrc = (isKai || isEden) ? AVATAR_MAP[selectedAvatar] : null;
 
           // System/Error messages
           if (isSystem || msg.isError) {
@@ -371,6 +369,10 @@ export default function ChatWindow() {
                 <img
                   src={avatarSrc}
                   alt={msg.speaker}
+                  onError={(e) => {
+                    console.log(`Failed to load avatar: ${avatarSrc}`);
+                    e.target.src = "/penguin_avatar.png"; // Fallback to penguin
+                  }}
                   style={{
                     width: 180,
                     height: 180,
@@ -532,14 +534,36 @@ export default function ChatWindow() {
             color: darkMode ? "#fff" : "#000",
             border: `1px solid ${darkMode ? "#555" : "#ddd"}`,
             borderRadius: "4px",
-            minWidth: '80px'
+            minWidth: '100px'
           }}
           disabled={isLoading}
         >
-          <option value="kai">🐧 Kai</option>
-          <option value="eden">🐕 Eden</option>
+          <option value="kai"> Kai</option>
+          <option value="eden"> Eden</option>
         </select>
         
+        <select
+          value={selectedAvatar}
+          onChange={(e) => setSelectedAvatar(e.target.value)}
+          style={{
+            margin: 5, 
+            padding: 8, 
+            fontSize: "1rem",
+            background: darkMode ? "#333" : "#fff",
+            color: darkMode ? "#fff" : "#000",
+            border: `1px solid ${darkMode ? "#555" : "#ddd"}`,
+            borderRadius: "4px",
+            minWidth: '140px'
+          }}
+          disabled={isLoading}
+        >
+          <option value="samoyed">🐕 Samoyed</option>
+          <option value="penguin">🐧 Penguin</option>
+          <option value="capybara">🐹 Capybara</option>
+          <option value="axolotl">🦎 Axolotl</option>
+          <option value="bat">🦇 Bat</option>
+        </select>
+
         <input
           type="text"
           placeholder="Session ID"

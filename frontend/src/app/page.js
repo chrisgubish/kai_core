@@ -3,12 +3,20 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import ChatWindow from '../components/ChatWindow.jsx';
 
+
+
+
 // Avatar mapping by persona
-const AVATAR_MAP = {
-  kai: "/penguin_avatar.png",
-  eden: "/samoyed_avatar.png",
-  // Add more as needed
-};
+// const [selectedAvatar, setSelectedAvatar] = useState('penguin');
+
+// const AVATAR_MAP = {
+//   samoyed: "/samoyed_avatar.png",
+//   penguin: "/penguin_avatar.png",
+//   capybara: "/capybara_avatar.png",
+//   axolotl: "/axolotle_avatar.png",
+//   bat: "/bat_avatar.png",
+//   // Add more as needed
+// };
 
 // export default function Home() {
 //   const [darkMode, setDarkMode] = useState(false);
