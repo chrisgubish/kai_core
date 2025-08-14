@@ -5,7 +5,7 @@
 Kai isn’t just another app. It should feel like a safe, emotionally warm space—less like tech, more like a cozy garden you visit when the world feels overwhelming.
 
 * Tone: Uplifting, non-corporate, and emotionally intelligent.
-* Visual Influence: Township, Animal Crossing, Pinterest, and Spotify Wrapped—but for your heart.
+* Visual Influence: Township, Animal Crossing, Pinterest.
 * Moodboard Keywords: Light, soulful, gentle motion, handwritten vibes, sunlit edges, responsive expression.
 
 ## Kai's Visual Identity
@@ -21,37 +21,79 @@ Kai isn’t just another app. It should feel like a safe, emotionally warm space
 
 * "Feel > Feature" — prioritize emotional response over tech flashiness
 * Microinteractions matter: typing dots, breathing animations, light haptics (eventually)
-* Each action should feel like a small kindness
 * Avoid sterile or transactional layouts—this is not a chatbot interface
 
 ## Notes for Future Designers
 
 You’re not designing a UI—you’re designing a feeling.
 
-* Avoid corporate UX tropes, over-gamification, or overly masculine interfaces
+* Avoid corporate UX tropes or overly masculine interfaces
 * Do study emotionally intelligent design: meditation apps, affirmations, visual journaling
-* Every color, motion, sound should be selected like you're speaking to someone with a tender heart
+* Every color, motion, sound should be selected like you're giving life to something new. You're designing with the users in mind, not as an afterthought
 
 ## File Structure Alignment
 
 The following reflects the current project hierarchy relevant to frontend/UX design:
 
-```
+...
 kai-core/
 ├── backend/
 │   ├── api/
+│   │   ├── persona_api.py
+│   │   ├── emotion_weights.py
+│   │   └── tone_adapter.py
 │   ├── memory/
-│   └── processing/
+│   │   ├── memory_store.py
+│   │   ├── vector_memory_store.py
+│   │   ├── embeddings.py
+│   │   └── eden_memory_defender.py
+│   ├── inference/
+│   │   ├── affect.py
+│   │   └── eden_inference.py
+│   └── persona/
+│       ├── eden_persona.py
+│       ├── kai_persona.py
+│       └── scheduler.py
 ├── frontend/
-│   ├── assets/               # icons, avatars, animations, etc.
-│   ├── themes/               # Kai Skies, dark/light variants
-│   ├── chatapp.js            # main interaction logic
-│   ├── styleapp.css          # current styling prototype
-│   └── frontend.html         # placeholder for main UI view
-├── DESIGN_NOTES.md
-├── ARCHITECTURE_NOTES.md
-└── README.md
-```
+│   ├── .next/                    # Next.js build output
+│   │   ├── build/
+│   │   ├── cache/
+│   │   ├── server/
+│   │   └── static/
+│   ├── node_modules/             # NPM dependencies
+│   ├── public/
+│   │   ├── samoyed_avatar.png
+│   │   ├── penguin_avatar.png
+│   │   ├── capybara_avatar.png
+│   │   ├── axolotl_avatar.png
+│   │   └── bat_avatar.png
+│   ├── src/
+│   │   ├── app/                  # Next.js 13+ app directory
+│   │   │   ├── globals.css
+│   │   │   ├── layout.js
+│   │   │   └── page.js
+│   │   └── components/
+│   │       └── ChatWindow.jsx
+│   ├── .dockerignore
+│   ├── .gitignore
+│   ├── compose.yaml
+│   ├── Dockerfile
+│   ├── eslint.config.mjs
+│   ├── jsconfig.json
+│   ├── next.config.mjs
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── postcss.config.mjs
+│   ├── README.Docker.md
+│   └── README.md
+├── models/
+├── Docs/
+│   ├── ARCHITECTURE_NOTES.md
+│   ├── DESIGN_NOTES.md
+│   └── README.md
+├── .venv/
+└── .env
+...
 
 ## Suggested Experiments
 

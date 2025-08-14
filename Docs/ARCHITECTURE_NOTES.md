@@ -13,41 +13,65 @@ This document outlines the structural and architectural decisions made during th
 
 ## Current Directory Structure
 
-```
+...
 kai-core/
 ├── backend/
-│   ├── api/                  # interaction endpoints (LLM routing, user data, etc.)
-│   ├── memory/               # memory modules (e.g., eden_memory.py)
-│   ├── processing/           # tone adapters, embeddings, summaries
-│   ├── persona_api.py        # thin controller layer for persona selection
-│   ├── emotion_weights.py    # custom tuning matrix (placeholder logic)
-│   └── tone_adapter.py       # emotional tone interpreter
+│   ├── api/
+│   │   ├── persona_api.py
+│   │   ├── emotion_weights.py
+│   │   └── tone_adapter.py
+│   ├── memory/
+│   │   ├── memory_store.py
+│   │   ├── vector_memory_store.py
+│   │   ├── embeddings.py
+│   │   └── eden_memory_defender.py
+│   ├── inference/
+│   │   ├── affect.py
+│   │   └── eden_inference.py
+│   └── persona/
+│       ├── eden_persona.py
+│       ├── kai_persona.py
+│       └── scheduler.py
 ├── frontend/
-│   ├── assets/               # future image/audio assets
-│   ├── themes/               # visual palettes, Kai Skies, light/dark
-│   ├── chatapp.js
-│   ├── styleapp.css
-│   └── frontend.html
-├── tests/                    # basic self-tests and scripts
-├── models/                   # LLM weights or references (eventual vector DB plug-in)
-├── llama.cpp/               # optional integration with local model runner
-├── eden_env/                # environment/infra files (venv-like logic)
-├── .git/                    # version control
-├── .venv/                   # Python virtual environment
-├── venv/                    # redundant - will be pruned
-├── .env                     # secrets placeholder (NEVER push real creds)
-├── dreamlog.py              # Eden’s nightly log generator
-├── eden_emotion_profile.yaml
-├── eden_inference0.py       # legacy inference trial (to be deprecated)
-├── eden_monologue.py        # solo Eden reflection tool
-├── eden_persona.py          # deprecated, now kai_persona.py takes over
-├── kai_persona.py           # current persona selector logic
-├── scheduler.py             # for Kai’s eventual background tasks (dreams, reminders)
-├── DESIGN_NOTES.md
-├── ARCHITECTURE_NOTES.md
-├── README.md
-├── requirements.txt         # for backend environment setup
-```
+│   ├── .next/                    # Next.js build output
+│   │   ├── build/
+│   │   ├── cache/
+│   │   ├── server/
+│   │   └── static/
+│   ├── node_modules/             # NPM dependencies
+│   ├── public/
+│   │   ├── samoyed_avatar.png
+│   │   ├── penguin_avatar.png
+│   │   ├── capybara_avatar.png
+│   │   ├── axolotl_avatar.png
+│   │   └── bat_avatar.png
+│   ├── src/
+│   │   ├── app/                  # Next.js 13+ app directory
+│   │   │   ├── globals.css
+│   │   │   ├── layout.js
+│   │   │   └── page.js
+│   │   └── components/
+│   │       └── ChatWindow.jsx
+│   ├── .dockerignore
+│   ├── .gitignore
+│   ├── compose.yaml
+│   ├── Dockerfile
+│   ├── eslint.config.mjs
+│   ├── jsconfig.json
+│   ├── next.config.mjs
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── postcss.config.mjs
+│   ├── README.Docker.md
+│   └── README.md
+├── models/
+├── Docs/
+│   ├── ARCHITECTURE_NOTES.md
+│   ├── DESIGN_NOTES.md
+│   └── README.md
+├── .venv/
+└── .env
+...
 
 ## Future Goals
 
@@ -58,10 +82,29 @@ kai-core/
 
 ## Dependencies
 
+**Backend:**
 * Python >= 3.10
-* FastAPI (or Flask, modular fallback)
-* LLAMA.cpp (for local LLM experimentation)
-* Frontend: Vanilla JS + CSS for now; Tailwind or React optional in later builds
+* FastAPI with uvicorn
+* transformers, torch (for LLM inference)
+* chromadb (for vector memory)
+
+**Frontend:**
+* Node.js >= 18.0
+* Next.js 14+ with React 18+
+* Tailwind CSS (utility classes only)
+* React Mardkwon for message rendering
+
+**Future Mobile:**
+* React Native for iOS and Android apps
+
+## Avatar System
+* **5 Companion Designs:** Samoyed, Penguin, Capybara, Axolotl, Bat
+* **Independent Selection:** Users choose visual design separa from personality (Kai/Eden)
+* **Circular Avar Display:** 180px with soft shadows and gentle animations
+* **Fallback System:** Defaults to penguin if avatar fails to load
+
+**Future Implementations**
+* **Customizable** customizable avatars using preset designs that users can unlock to modify and design their avatars. Gives users the ability to give their personal flair to the avatars to make it a true mirror/expression of themselves
 
 ## Memory Notes
 
