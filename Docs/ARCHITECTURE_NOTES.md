@@ -13,7 +13,7 @@ This document outlines the structural and architectural decisions made during th
 
 ## Current Directory Structure
 
-...
+```text
 kai-core/
 ├── backend/
 │   ├── api/
@@ -71,8 +71,7 @@ kai-core/
 │   └── README.md
 ├── .venv/
 └── .env
-...
-
+```
 ## Future Goals
 
 * Containerization (Docker) for portable deployment
@@ -92,15 +91,15 @@ kai-core/
 * Node.js >= 18.0
 * Next.js 14+ with React 18+
 * Tailwind CSS (utility classes only)
-* React Mardkwon for message rendering
+* React Markdown for message rendering
 
 **Future Mobile:**
 * React Native for iOS and Android apps
 
 ## Avatar System
 * **5 Companion Designs:** Samoyed, Penguin, Capybara, Axolotl, Bat
-* **Independent Selection:** Users choose visual design separa from personality (Kai/Eden)
-* **Circular Avar Display:** 180px with soft shadows and gentle animations
+* **Independent Selection:** Users choose visual design separate from personality (Kai/Eden)
+* **Circular Avatar Display:** 180px with soft shadows and gentle animations
 * **Fallback System:** Defaults to penguin if avatar fails to load
 
 **Future Implementations**

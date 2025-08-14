@@ -35,7 +35,7 @@ You’re not designing a UI—you’re designing a feeling.
 
 The following reflects the current project hierarchy relevant to frontend/UX design:
 
-...
+```text
 kai-core/
 ├── backend/
 │   ├── api/
@@ -93,7 +93,7 @@ kai-core/
 │   └── README.md
 ├── .venv/
 └── .env
-...
+```
 
 ## Suggested Experiments
 
