@@ -9,7 +9,7 @@ Kai is an emotionally intelligent AI platform designed to help users feel heard,
 This repository contains the early-stage backend, memory infrastructure, and interface components for Kai's MVP (Minimum Viable Prototype). Everything is built with long-term resilience and eventual handoff to professional design teams in mind.
 
 ## File Structure
-...
+```text
 kai-core/
 ├── backend/
 │   ├── api/
@@ -67,13 +67,10 @@ kai-core/
 │   └── README.md
 ├── .venv/
 └── .env
-...
+```
 
 ## How to Run (Basic Dev Setup)
 
-```bash
-├── DESIGN_NOTES.md
-└── ARCHITECTURE_NOTES.md
 # Clone the repo
 $ git clone https://github.com/your-kai-repo/kai-core.git
 $ cd kai-core
@@ -88,12 +85,11 @@ $ pip install -r requirements.txt
 
 # Frontend Setup
 $ cd frontend
-$ npm install          #Install React/Next.js dependecies
+$ npm install          #Install React/Next.js dependencies
 $ npm run dev          #Start Next.js development server
 
-# Start dev server (in seperate terminal)
+# Start dev server (in separate terminal)
 $ uvicorn backend.api.persona_api:app --reload --port 8000
-```
 
 ## Philosophy
 
