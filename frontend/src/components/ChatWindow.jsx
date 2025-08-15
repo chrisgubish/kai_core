@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 // Updated AVATAR_MAP with correct paths
@@ -8,12 +8,16 @@ const AVATAR_MAP = {
   samoyed: "/samoyed_avatar.png",
   penguin: "/penguin_avatar.png",
   capybara: "/capybara_avatar.png",
-  axolotl: "/axolotl_avatar.png",  // Fixed typo: was "axolotle"
+  axolotl: "/axolotl_avatar.png",
   bat: "/bat_avatar.png"
 };
 
 export default function ChatWindow() {
   /* ---------- STATE ---------- */
+  const [authToken, setAuthToken] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [ws, setWs] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
@@ -22,7 +26,124 @@ export default function ChatWindow() {
   const [memory, setMemory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [selectedAvatar, setSelectedAvatar] = useState('penguin'); // MOVED INSIDE COMPONENT
+  const [selectedAvatar, setSelectedAvatar] = useState('penguin');
+  const [showLogin, setShowLogin] = useState(true);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [registerMode, setRegisterMode] = useState(false);
+
+  const wsRef = useRef(null);
+
+  /* ---------- LOGIN/REGISTER ---------- */
+  async function handleAuth(e) {
+    e.preventDefault();
+    const { username, password } = loginForm;
+    
+    if (!username || !password) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    try {
+      const endpoint = registerMode ? "/register" : "/token";
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
+
+      const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString()
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        if (registerMode) {
+          alert('Registration successful! Please login.');
+          setRegisterMode(false);
+        } else {
+          setAuthToken(data.access_token);
+          setUserId(data.user_id);
+          setIsAuthenticated(true);
+          setShowLogin(false);
+          localStorage.setItem("authToken", data.access_token);
+          localStorage.setItem("userId", data.user_id);
+          connectWebSocket(data.user_id, data.access_token);
+        }
+      } else {
+        alert(data.detail || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error("Auth failed:", error);
+      alert('Authentication failed. Please try again.');
+    }
+  }
+
+  /* ---------- WEBSOCKET CONNECTION ---------- */
+  function connectWebSocket(userId, token) {
+    try {
+      setConnectionStatus('connecting');
+      // For development, we'll skip token validation
+      const wsUrl = `ws://127.0.0.1:8000/ws/${userId}`;
+      const websocket = new WebSocket(wsUrl);
+      
+      websocket.onopen = () => {
+        console.log('[WebSocket] Connected');
+        setConnectionStatus('connected');
+        setWs(websocket);
+        wsRef.current = websocket;
+      };
+
+      websocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[WebSocket] Received:', data);
+          
+          if (data.type === 'message') {
+            const aiMsg = {
+              speaker: data.persona,
+              message: data.content,
+              emotions: data.emotions || {}
+            };
+            setMessages(prev => [...prev, aiMsg]);
+            setIsLoading(false);
+            setConnectionStatus('connected');
+          } else if (data.type === 'typing') {
+            setIsLoading(true);
+            setConnectionStatus('sending');
+          } else if (data.type === 'error') {
+            console.error('[WebSocket] Error:', data.content);
+            setIsLoading(false);
+            setConnectionStatus('error');
+            const errorMsg = {
+              speaker: 'system',
+              message: `Error: ${data.content}`,
+              isError: true
+            };
+            setMessages(prev => [...prev, errorMsg]);
+          }
+        } catch (err) {
+          console.error('[WebSocket] Failed to parse message:', err);
+        }
+      };
+
+      websocket.onclose = () => {
+        console.log('[WebSocket] Disconnected');
+        setConnectionStatus('disconnected');
+        setWs(null);
+        wsRef.current = null;
+      };
+
+      websocket.onerror = (error) => {
+        console.error('[WebSocket] Error:', error);
+        setConnectionStatus('error');
+      };
+
+    } catch (error) {
+      console.error('[WebSocket] Connection failed:', error);
+      setConnectionStatus('error');
+    }
+  }
 
   /* ---------- LOAD CACHED DATA ---------- */
   useEffect(() => {
@@ -44,11 +165,22 @@ export default function ChatWindow() {
     if (savedAvatar && AVATAR_MAP[savedAvatar]) {
       setSelectedAvatar(savedAvatar);
     }
+
+    // Check for existing auth
+    const storedToken = localStorage.getItem("authToken");
+    const storedUserId = localStorage.getItem("userId");
+    if (storedToken && storedUserId) {
+      setAuthToken(storedToken);
+      setUserId(storedUserId);
+      setIsAuthenticated(true);
+      setShowLogin(false);
+      connectWebSocket(storedUserId, storedToken);
+    }
     
-    // Load cached messages ONLY if backend memory exists
+    // Load cached messages
     loadMemory().then(() => {
       const cache = JSON.parse(localStorage.getItem("kaiChatCache") || "[]");
-      if (cache.length > 0 && memory.length > 0) {
+      if (cache.length > 0) {
         setMessages(cache);
       }
     });
@@ -70,7 +202,6 @@ export default function ChatWindow() {
     localStorage.setItem("lastSessionId", sessionId);
   }, [sessionId]);
 
-  // Save selected avatar to localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem("selectedAvatar", selectedAvatar);
@@ -111,10 +242,9 @@ export default function ChatWindow() {
   /* ---------- SEND MESSAGE ---------- */
   async function sendMessage(e) {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || !ws || ws.readyState !== WebSocket.OPEN || isLoading) return;
 
     const userMessage = input.trim();
-    
     const userMsg = { speaker: 'user', message: userMessage };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -122,39 +252,18 @@ export default function ChatWindow() {
     setConnectionStatus('sending');
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_input: userMessage,
-          session_id: sessionId,
-          persona: persona
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const aiMsg = {
-        speaker: persona,
-        message: data.response,
-        emotions: data.emotions || {}
+      // Send message via WebSocket
+      const messageData = {
+        message: userMessage,
+        persona: persona
       };
-      setMessages(prev => [...prev, aiMsg]);
-      setConnectionStatus('connected');
-
-      setTimeout(() => loadMemory(), 500);
-
+      
+      ws.send(JSON.stringify(messageData));
+      
     } catch (err) {
       console.error('sendMessage error:', err);
       setConnectionStatus('error');
+      setIsLoading(false);
       
       const errorMsg = {
         speaker: 'system',
@@ -162,9 +271,23 @@ export default function ChatWindow() {
         isError: true
       };
       setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
     }
+  }
+
+  /* ---------- LOGOUT ---------- */
+  function logout() {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    setAuthToken(null);
+    setUserId(null);
+    setIsAuthenticated(false);
+    setShowLogin(true);
+    setMessages([]);
+    setMemory([]);
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("kaiChatCache");
   }
 
   /* ---------- CLEAR MEMORY ---------- */
@@ -178,8 +301,6 @@ export default function ChatWindow() {
       
       if (typeof window !== "undefined") {
         localStorage.removeItem("kaiChatCache");
-        localStorage.removeItem("lastPersona");
-        localStorage.removeItem("lastSessionId");
       }
       
       await loadMemory();
@@ -214,7 +335,133 @@ export default function ChatWindow() {
     }
   }
 
-  /* ---------- RENDER ---------- */
+  /* ---------- LOGIN FORM ---------- */
+  if (showLogin) {
+    return (
+      <div className={darkMode ? 'dark-mode' : ''} style={{ minHeight: '100vh', background: darkMode ? "#1a1a1a" : "#f9f9f9" }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: darkMode ? "#333" : "#fff",
+            padding: '40px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            width: '100%',
+            maxWidth: '400px',
+            color: darkMode ? "#fff" : "#000"
+          }}>
+            <h2 style={{ textAlign: 'center', marginBottom: '30px', color: "#4b9fe1" }}>
+              {registerMode ? 'Register for Kai Chat' : 'Login to Kai Chat'}
+            </h2>
+            
+            <form onSubmit={handleAuth}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Username:
+                </label>
+                <input
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `1px solid ${darkMode ? "#555" : "#ddd"}`,
+                    borderRadius: '6px',
+                    background: darkMode ? "#444" : "#fff",
+                    color: darkMode ? "#fff" : "#000",
+                    fontSize: '16px'
+                  }}
+                  placeholder="Enter username"
+                  required
+                />
+              </div>
+              
+              <div style={{ marginBottom: '30px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Password:
+                </label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `1px solid ${darkMode ? "#555" : "#ddd"}`,
+                    borderRadius: '6px',
+                    background: darkMode ? "#444" : "#fff",
+                    color: darkMode ? "#fff" : "#000",
+                    fontSize: '16px'
+                  }}
+                  placeholder="Enter password"
+                  required
+                />
+              </div>
+              
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: '#4b9fe1',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginBottom: '15px'
+                }}
+              >
+                {registerMode ? 'Register' : 'Login'}
+              </button>
+            </form>
+            
+            <div style={{ textAlign: 'center' }}>
+              <button
+                onClick={() => setRegisterMode(!registerMode)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4b9fe1',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {registerMode ? 'Already have an account? Login' : "Don't have an account? Register"}
+              </button>
+            </div>
+            
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button 
+                onClick={toggleTheme}
+                style={{
+                  background: 'rgba(75, 159, 225, 0.2)',
+                  border: 'none',
+                  color: darkMode ? '#fff' : '#4b9fe1',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- MAIN CHAT INTERFACE ---------- */
   return (
     <div className={darkMode ? 'dark-mode' : ''} style={{ minHeight: '100vh' }}>
       {/* Header */}
@@ -297,6 +544,20 @@ export default function ChatWindow() {
             }}
           >
             {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+          <button 
+            onClick={logout}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: 'white',
+              padding: '5px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.9rem'
+            }}
+          >
+            🚪 Logout
           </button>
         </div>
       </header>
@@ -538,8 +799,8 @@ export default function ChatWindow() {
           }}
           disabled={isLoading}
         >
-          <option value="kai"> Kai</option>
-          <option value="eden"> Eden</option>
+          <option value="kai">🧑 Kai</option>
+          <option value="eden">👩 Eden</option>
         </select>
         
         <select
@@ -613,7 +874,7 @@ export default function ChatWindow() {
             cursor: isLoading ? "not-allowed" : "pointer",
             minWidth: '80px'
           }}
-          disabled={isLoading || !input.trim()}
+          disabled={isLoading || !input.trim() || connectionStatus !== 'connected'}
         >
           {isLoading ? "..." : "Send"}
         </button>
