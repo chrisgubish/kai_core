@@ -1,7 +1,7 @@
 from threading import Event
 from datetime import datetime
 import time
-from dreamlog import generate_dreamlog_entry
+from backend.persona.dreamlog import generate_dreamlog_entry
 
 _STOP = Event()
 

@@ -1,47 +1,64 @@
-#ignore the following files for git
+# === OS cruft ===
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# === Python-specific ===
+# === Python ===
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.so
+.eggs/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.tox/
 
-
-# === Virtual Environments ===
+# === Virtual Envs ===
 venv/
 .venv/
 
-
-# === Environment Variables / Secrets ===
+# === Env / Secrets ===
 .env
-*.env
-
-# == Editor / IDE Config ===
-.vscode/
-.idea/
+.env.*
+!.env.example
 
 # === Logs / Caches ===
 *.log
 *.bak
 *.swp
-.cache/
 *.tmp
+.cache/
 
-# === Node / Fronend Build ===
+# === Node / Next.js ===
 node_modules/
-dist/
-build/
+.next/
+out/
+.turbo/
+.vercel/
+coverage/
+.nyc_output/
+.eslintcache
 
-# === Model Checkpoints (future-proofing) ===
+# === Docker runtime (keep Dockerfile/compose tracked) ===
+*.pid
+*.pid.lock
+
+# === Models / large checkpoints ===
+models/
+checkpoints/
+*.safetensors
+*.gguf
+*.onnx
 *.pt
 *.ckpt
 *.bin
 
-# === VS Code Notebooks / Checkpoints ===
-.ipynb_checkpoints/
-
-
-# === Personal Files ===
-*.docx
-*.pdf
-*.xlsx
+# === App runtime data (don’t version these) ===
+eden_memory.json
+eden_self_log.json
