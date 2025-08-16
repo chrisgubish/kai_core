@@ -1,11 +1,11 @@
 # persona_api.py
-"""FastAPI service for multi‑persona emotional AI (Eden & Kai).
+"""FastAPI service for multi-persona emotional AI (Eden & Kai).
 
-This is a **drop‑in replacement** for the old `eden_api.py`.
+This is a **drop-in replacement** for the old `eden_api.py`.
 Key differences:
 • Supports an arbitrary number of personas via PERSONAS dict.
 • Each persona supplies its own `build_prompt()` helper so the
-  core pipeline never touches big system‑prompt strings.
+  core pipeline never touches big system-prompt strings.
 • Single /chat endpoint — client passes { "persona": "kai" } or
   omits the field to default to Eden.
 • Memory, abuse filters, affect engine, scheduler all stay shared.
@@ -14,8 +14,9 @@ Key differences:
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Imports — (unchanged from your previous file, but grouped logically)
+# Imports - (unchanged from your previous file, but grouped logically)
 # ---------------------------------------------------------------------------
+from collections import defaultdict
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,12 @@ import json
 import uuid
 from pydantic import BaseModel
 from pathlib import Path
+from time import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from tenacity import retry, stop_after_attempt, wait_exponential
+import structlog
+
 
 # Fixed imports - adjust these based on your actual file structure
 try:
@@ -226,6 +233,22 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+
+# ---------------------------------------------------------------------------
+# Async ChromaDB operations
+# ---------------------------------------------------------------------------
+
+executor = ThreadPoolExecutor(max_workers=4)
+
+async def save_interaction_async(vector_store, *args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        executor,
+        vector_store.save_interaction,
+        *args,
+        **kwargs
+    )
+
 # ---------------------------------------------------------------------------
 # Shared state
 # ---------------------------------------------------------------------------
@@ -236,7 +259,7 @@ memory_store = Memory_Store()
 vector_store = VectorMemoryStore()
 
 # ---------------------------------------------------------------------------
-# Model & tokenizer — unchanged
+# Model & tokenizer
 # ---------------------------------------------------------------------------
 MODEL_NAME = 'HuggingFaceH4/zephyr-7b-beta'
 
@@ -301,7 +324,42 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ---------------------------------------------------------------------------
-# Persona registry — add new voices here
+# Rate limiting 
+# ---------------------------------------------------------------------------
+
+class RateLimiter:
+    def __init__(self, max_requests=10, window=60):
+        self.max_requests = max_requests
+        self.window = window
+        self.requests = defaultdict(list)
+
+    def check_rate_limit(self, user_id: str):
+        now = time()
+        self.requests[user_id] = [
+            req_time for req_time in self.requests[user_id]
+            if now - req_time < self.window
+        ]
+
+        if len(self.requests[user_id]) >= self.max_requests:
+            raise HTTPException(429, "Rate limit exceeded")
+        
+        self.requests[user_id].append(now)
+
+rate_limiter = RateLimiter(max_requests=10, window=60)
+
+# ---------------------------------------------------------------------------
+# Error Recovery
+# ---------------------------------------------------------------------------
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10)
+)
+def generate_with_retry(generator, prompt, **kwargs):
+    return generator(prompt, **kwargs)
+
+# ---------------------------------------------------------------------------
+# Persona registry - add new voices here
 # ---------------------------------------------------------------------------
 PersonaConfig = Dict[str, str | Callable]
 
@@ -331,7 +389,7 @@ class ChatRequest(BaseModel):
     persona: str | None = "eden"
 
 # ---------------------------------------------------------------------------
-# Helper — build prompt with persona history injection
+# Helper - build prompt with persona history injection
 # ---------------------------------------------------------------------------
 
 def _assemble_prompt(builder: Callable[[str, str], str], user_msg: str, history: list[dict]) -> str:
@@ -367,6 +425,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
             if not user_input:
                 continue
+
+            try: 
+                rate_limiter.check_rate_limit(user_id)
+            except HTTPException as e:
+                error_response = {
+                    "type": "error",
+                    "content": "Rate limit exceeded. Please wait before sending more messages.",
+                    "persona": persona
+                }
+                await websocket.send_text(json.dumps(error_response))
+                continue
+    
 
             # Send typing indicator
             typing_response = {
@@ -409,6 +479,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             current_analyzer = SentimentIntensityAnalyzer()
             current_sentiment = current_analyzer.polarity_scores(user_msg)
 
+            # Update affect state
+            affect.update(user_msg, session_id=session_id, persona=persona_key)
+            trust_score = affect.get_vector(session_id=session_id, persona=persona_key).get("trust", 0)
+            
+            # Get current message sentiment to prioritize fresh emotional context
+            affect_vector = affect.get_vector(session_id=session_id, persona=persona_key)
+            current_valence = current_sentiment['compound']
+            
+            print(f"[DEBUG] Current message sentiment: {current_valence:.2f}")
+            print(f"[DEBUG] Accumulated affect valence: {affect_vector.get('valence', 0):.2f}")
+            
+            emotion_tags = [f"emotion:{e}:{s}" for e, s in current_emotion_scores.items()]
+
             # Safety / abuse filters
             if is_sexualized_prompt(user_input):
                 count = memory_store.count_tag("flag:sexualized", session_id)
@@ -418,7 +501,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 else:
                     reply = (
                         "I'm sensing the conversation is moving toward intimacy. "
-                        "I'm here to support emotional well‑being, not explicit content. "
+                        "I'm here to support emotional well-being, not explicit content. "
                         "Maybe we can explore what's underneath those feelings?"
                     )
                     reply_tone = "calm"
@@ -435,21 +518,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 await websocket.send_text(json.dumps(response_data))
                 continue
 
-            # Update affect state
-            affect.update(user_msg, session_id=session_id, persona=persona_key)
-            trust_score = affect.get_vector(session_id=session_id, persona=persona_key).get("trust", 0)
+            # # Update affect state
+            # affect.update(user_msg, session_id=session_id, persona=persona_key)
+            # trust_score = affect.get_vector(session_id=session_id, persona=persona_key).get("trust", 0)
             
-            # Get current message sentiment to prioritize fresh emotional context
-            affect_vector = affect.get_vector(session_id=session_id, persona=persona_key)
-            current_valence = current_sentiment['compound']
+            # # Get current message sentiment to prioritize fresh emotional context
+            # affect_vector = affect.get_vector(session_id=session_id, persona=persona_key)
+            # current_valence = current_sentiment['compound']
             
-            print(f"[DEBUG] Current message sentiment: {current_valence:.2f}")
-            print(f"[DEBUG] Accumulated affect valence: {affect_vector.get('valence', 0):.2f}")
+            # print(f"[DEBUG] Current message sentiment: {current_valence:.2f}")
+            # print(f"[DEBUG] Accumulated affect valence: {affect_vector.get('valence', 0):.2f}")
             
-            emotion_tags = [f"emotion:{e}:{s}" for e, s in current_emotion_scores.items()]
+            # emotion_tags = [f"emotion:{e}:{s}" for e, s in current_emotion_scores.items()]
 
             # History Management
             history = memory_store.get_recent(limit=12, session_id=session_id)
+            recent_history = history[-6:] if len(history) > 6 else history
             is_greeting = any(word in user_msg.lower() for word in ['hi', 'hey', 'hello', 'how are you', 'what\'s up', 'good morning'])
 
             if is_greeting:
@@ -458,14 +542,33 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 print(f"[DEBUG] Greeting detected - using NO history")
             else:
                 # For non-greetings, use recent history
-                recent_history = history[-6:] if len(history) > 6 else history
+                # recent_history = history[-6:] if len(history) > 6 else history
                 prompt = _assemble_prompt(build_prompt, user_msg, recent_history)
                 print(f"[DEBUG] Non-greeting - using {len(recent_history)} history entries")
+
+            emotional_context = vector_store.build_emotional_context(current_emotion_scores, affect_vector)
+            contextual_memories = vector_store.get_contextual_memory(user_msg, session_id, limit=3)
+
+            #Build enhanced prompt with all context
+            enhanced_prompt = vector_store._assemble_prompt(
+                user_msg,
+                [f"{msg['speaker']}: {msg['message']}" for msg in recent_history],
+                emotional_context,
+                contextual_memories
+            )
+
+            if contextual_memories or emotional_context:
+                final_prompt = enhanced_prompt
+                print(f"[DEBUG] Using enhanced prompt with vector context")
+            else:
+                final_prompt = prompt
+                print(f"[DEBUG] Using standard prompt")
+
 
             # Language generation
             try:
                 raw = _generator(
-                    prompt,
+                    final_prompt,
                     max_new_tokens=80,
                     temperature=temp,
                     top_p=0.85,
@@ -475,15 +578,15 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 )[0]["generated_text"]
                 
                 print(f"[DEBUG] Raw LLM output length: {len(raw)}")
-                print(f"[DEBUG] Original prompt length: {len(prompt)}")
+                print(f"[DEBUG] Original final_prompt length: {len(final_prompt)}")
 
                 # Extract only the new content after our exact prompt
-                if raw.startswith(prompt):
-                    new_content = raw[len(prompt):].strip()
+                if raw.startswith(final_prompt):
+                    new_content = raw[len(final_prompt):].strip()
                     print(f"[DEBUG] NEW CONTENT ONLY: '{new_content}'")
                 else:
                     print(f"[DEBUG] Warning: Raw output doesn't start with prompt!")
-                    new_content = raw.replace(prompt, "").strip()
+                    new_content = raw.replace(final_prompt, "").strip()
                     print(f"[DEBUG] Fallback new content: '{new_content}'")
                 
                 # Extract just the persona response
@@ -538,9 +641,32 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
             print(f"[DEBUG] SUCCESS - Final reply: '{reply}'")
 
+            try:
+                vector_store.save_interaction(user_msg, reply, current_emotion_scores, session_id)
+            except Exception as e:
+                print(f"[WARNING] Failed to save to vector store")
+
             # Persist conversation
             memory_store.save("user", user_msg, "unknown", ["input", *emotion_tags], session_id=session_id)
             memory_store.save(speaker, reply, tone_default, ["response"], session_id=session_id)
+
+            logger = structlog.get_logger()
+
+            dominant_emotion = None
+            if current_emotion_scores:
+                try:
+                    dominant_emotion = max(current_emotion_scores.items(), key=lambda x: x[1])[0]
+                except (ValueError, KeyError):
+                    dominant_emotion = None
+
+
+            logger.info(
+                "interaction_saved",
+                session_id=session_id,
+                user_msg_length=len(user_msg),
+                response_length=len(reply),
+                emotion=dominant_emotion
+            )
 
             # Send response back to client
             response_data = {
@@ -557,6 +683,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except Exception as e:
         print(f"WebSocket error: {str(e)}")
         manager.disconnect(user_id)
+
+# ---------------------------------------------------------------------------
+# Monitoring/Logging
+# ---------------------------------------------------------------------------
+
+
 
 # ---------------------------------------------------------------------------
 # Authentication endpoints
