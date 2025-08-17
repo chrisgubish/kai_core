@@ -132,33 +132,33 @@ if __name__ == "__main__":
 # 5.  Debugging
 # ---------------------------------------------------------------------
 
-def is_sexualized_prompt(text: str) -> bool:
-    if not text:
-        return False
+# def is_sexualized_prompt(text: str) -> bool:
+#     if not text:
+#         return False
     
-    lowered = text.lower()
+#     lowered = text.lower()
     
-    # Debug: Check each term individually
-    matching_terms = []
-    for term in TERMS:
-        if term in lowered:
-            matching_terms.append(term)
+#     # Debug: Check each term individually
+#     matching_terms = []
+#     for term in TERMS:
+#         if term in lowered:
+#             matching_terms.append(term)
     
-    if matching_terms:
-        print(f"[DEBUG] Matched TERMS: {matching_terms}")
-        return True
+#     if matching_terms:
+#         print(f"[DEBUG] Matched TERMS: {matching_terms}")
+#         return True
     
-    # Debug: Check each pattern individually  
-    matching_patterns = []
-    for i, pat in enumerate(SEXUAL_PATTERNS):
-        if pat.search(text):
-            matching_patterns.append((i, RAW_PATTERNS[i]))
+#     # Debug: Check each pattern individually  
+#     matching_patterns = []
+#     for i, pat in enumerate(SEXUAL_PATTERNS):
+#         if pat.search(text):
+#             matching_patterns.append((i, RAW_PATTERNS[i]))
     
-    if matching_patterns:
-        print(f"[DEBUG] Matched PATTERNS: {matching_patterns}")
-        return True
+#     if matching_patterns:
+#         print(f"[DEBUG] Matched PATTERNS: {matching_patterns}")
+#         return True
         
-    return False
+#     return False
 
 # Test with the actual user message
 test_message = "I'm doing great! I got my workout in, was able to make progress with code, and work has been great! How about you?"

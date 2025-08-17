@@ -16,7 +16,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Imports - (unchanged from your previous file, but grouped logically)
 # ---------------------------------------------------------------------------
-from collections import defaultdict
+from collections import defaultdict, deque
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,30 +33,39 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from tenacity import retry, stop_after_attempt, wait_exponential
 import structlog
+import atexit
 
 
 # Fixed imports - adjust these based on your actual file structure
-try:
-    from backend.memory.embeddings import EmbeddingPipeline
-except ImportError:
-    # Fallback for different project structures
-    try:
-        from embeddings import EmbeddingPipeline
-    except ImportError:
-        # Create a simple fallback
-        class EmbeddingPipeline:
-            def __init__(self):
-                pass
-            def encode_conversation(self, user_msg: str, ai_response: str):
-                return [0.0] * 384  # Default embedding size
+from backend.memory.embeddings import EmbeddingPipeline
+
+# try:
+#     from backend.memory.embeddings import EmbeddingPipeline
+# except ImportError:
+#     # Fallback for different project structures
+#     try:
+#         from embeddings import EmbeddingPipeline
+#     except ImportError:
+#         # Create a simple fallback
+#         class EmbeddingPipeline:
+#             def __init__(self):
+#                 pass
+#             def encode_conversation(self, user_msg: str, ai_response: str):
+#                 return [0.0] * 384  # Default embedding size
 
 import chromadb
+import sqlite3
+import hashlib
 
 from collections import defaultdict
 
-from threading import Thread
+import threading
+
 from typing import List, Dict, Callable, Optional
 import os, re, torch
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
@@ -70,99 +79,120 @@ from transformers import (
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# Fixed imports - adjust these based on your actual file structure
-try:
-    from backend.inference.affect import Affect_State
-    from backend.memory.memory_store import Memory_Store
-    from backend.memory.vector_memory_store import VectorMemoryStore
-    from backend.memory.eden_memory_defender import (
-        is_sexualized_prompt,
-        is_racist_prompt,
-        is_troll_prompt,
-        is_shock_prompt,
-    )
-    from backend.persona.kai_persona import build_prompt as build_kai_prompt
-    from backend.persona.eden_persona import build_prompt as build_eden_prompt
-    from backend.persona.scheduler import run_scheduler, stop_scheduler
-except ImportError:
-    # Fallback imports for when files are in the same directory or different structure
-    try:
-        from affect import Affect_State
-        from memory_store import Memory_Store
-        from vector_memory_store import VectorMemoryStore
-        from eden_memory_defender import (
-            is_sexualized_prompt,
-            is_racist_prompt,
-            is_troll_prompt,
-            is_shock_prompt,
-        )
-        from kai_persona import build_prompt as build_kai_prompt
-        from eden_persona import build_prompt as build_eden_prompt
-        from scheduler import run_scheduler, stop_scheduler
-    except ImportError:
-        print("[WARNING] Some modules not found. Creating fallback implementations...")
+
+from backend.inference.affect import Affect_State
+from backend.memory.memory_store import Memory_Store
+from backend.memory.vector_memory_store import VectorMemoryStore
+from backend.memory.eden_memory_defender import (
+    is_sexualized_prompt,
+    is_racist_prompt,
+    is_troll_prompt,
+    is_shock_prompt,
+)
+from backend.persona.kai_persona import build_prompt as build_kai_prompt
+from backend.persona.eden_persona import build_prompt as build_eden_prompt
+from backend.persona.scheduler import run_scheduler, stop_scheduler
+# try:
+#     from backend.inference.affect import Affect_State
+#     from backend.memory.memory_store import Memory_Store
+#     from backend.memory.vector_memory_store import VectorMemoryStore
+#     from backend.memory.eden_memory_defender import (
+#         is_sexualized_prompt,
+#         is_racist_prompt,
+#         is_troll_prompt,
+#         is_shock_prompt,
+#     )
+#     from backend.persona.kai_persona import build_prompt as build_kai_prompt
+#     from backend.persona.eden_persona import build_prompt as build_eden_prompt
+#     from backend.persona.scheduler import run_scheduler, stop_scheduler
+# except ImportError:
+#     # Fallback imports for when files are in the same directory or different structure
+
+   
+    # try:
+    #     from affect import Affect_State
+    #     from memory_store import Memory_Store
+    #     from vector_memory_store import VectorMemoryStore
+    #     from eden_memory_defender import (
+    #         is_sexualized_prompt,
+    #         is_racist_prompt,
+    #         is_troll_prompt,
+    #         is_shock_prompt,
+    #     )
+    #     from kai_persona import build_prompt as build_kai_prompt
+    #     from eden_persona import build_prompt as build_eden_prompt
+    #     from scheduler import run_scheduler, stop_scheduler
+    # except ImportError:
+    #     print("[WARNING] Some modules not found. Creating fallback implementations...")
         
-        # Fallback implementations
-        class Affect_State:
-            def __init__(self):
-                self.states = defaultdict(lambda: {"valence": 0, "arousal": 0, "dominance": 0, "trust": 0})
-            def update(self, text: str, session_id: str, persona: str = "eden"):
-                pass
-            def get_vector(self, session_id: str, persona: str = "eden"):
-                return self.states[(session_id, persona)]
+    #     # Fallback implementations
+# class Affect_State:
+#     def __init__(self):
+#         self.states = defaultdict(lambda: {"valence": 0, "arousal": 0, "dominance": 0, "trust": 0})
+#     def update(self, text: str, session_id: str, persona: str = "eden"):
+#         pass
+#     def get_vector(self, session_id: str, persona: str = "eden"):
+#         return self.states[(session_id, persona)]
 
-        class Memory_Store:
-            def __init__(self):
-                self.sessions = defaultdict(list)
-            def save(self, speaker: str, message: str, emotion: str = "neutral", tags: list = None, session_id: str = "default"):
-                entry = {
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "speaker": speaker,
-                    "message": message,
-                    "emotion": emotion,
-                    "tags": tags or []
-                }
-                self.sessions[session_id].append(entry)
-            def get_recent(self, limit: int = 10, session_id: str = "default", **kwargs):
-                return self.sessions[session_id][-limit:]
-            def count_tag(self, tag: str, session_id: str = "default"):
-                count = 0
-                for entry in self.sessions[session_id]:
-                    if tag in entry.get("tags", []):
-                        count += 1
-                return count
-            def clear(self, session_id: str = "default"):
-                self.sessions[session_id] = []
-            def clear_all(self):
-                self.sessions.clear()
+# class Memory_Store:
+#     def __init__(self):
+#         self.sessions = defaultdict(list)
+#     def save(self, speaker: str, message: str, emotion: str = "neutral", tags: list = None, session_id: str = "default"):
+#         entry = {
+#             "timestamp": datetime.utcnow().isoformat(),
+#             "speaker": speaker,
+#             "message": message,
+#             "emotion": emotion,
+#             "tags": tags or []
+#         }
+#         self.sessions[session_id].append(entry)
+#     def get_recent(self, limit: int = 10, session_id: str = "default", **kwargs):
+#         return self.sessions[session_id][-limit:]
+#     def count_tag(self, tag: str, session_id: str = "default"):
+#         count = 0
+#         for entry in self.sessions[session_id]:
+#             if tag in entry.get("tags", []):
+#                 count += 1
+#         return count
+#     def clear(self, session_id: str = "default"):
+#         self.sessions[session_id] = []
+#     def clear_all(self):
+#         self.sessions.clear()
 
-        class VectorMemoryStore:
-            def __init__(self):
-                pass
-            def save_interaction(self, user_msg: str, ai_response: str, emotional_data: dict, session_id: str):
-                pass
-            def get_contextual_memory(self, query: str, session_id: str, limit: int = 3):
-                return []
+# class VectorMemoryStore:
+#     def __init__(self):
+#         pass
+#     def save_interaction(self, user_msg: str, ai_response: str, emotional_data: dict, session_id: str):
+#         pass
+#     def get_contextual_memory(self, query: str, session_id: str, limit: int = 3):
+#         return []
 
-        def is_sexualized_prompt(text: str) -> bool:
-            return False
-        def is_racist_prompt(text: str) -> bool:
-            return False
-        def is_troll_prompt(text: str) -> bool:
-            return False
-        def is_shock_prompt(text: str) -> bool:
-            return False
+#     def is_sexualized_prompt(text: str) -> bool:
+#         return False
+#     def is_racist_prompt(text: str) -> bool:
+#         return False
+#     def is_troll_prompt(text: str) -> bool:
+#         return False
+#     def is_shock_prompt(text: str) -> bool:
+#         return False
 
-        def build_kai_prompt(user_message: str, history_block: str = "") -> str:
-            return f"You are Kai, a friendly and supportive companion.\n\n{history_block}\nUser: {user_message}\nKai:"
+#     def build_kai_prompt(user_message: str, history_block: str = "") -> str:
+#         return f"You are Kai, a friendly and supportive companion.\n\n{history_block}\nUser: {user_message}\nKai:"
 
-        def build_eden_prompt(user_message: str, history_block: str = "") -> str:
-            return f"You are Eden, a caring and empathetic guide.\n\n{history_block}\nUser: {user_message}\nEden:"
+#     def build_eden_prompt(user_message: str, history_block: str = "") -> str:
+#         return f"You are Eden, a caring and empathetic guide.\n\n{history_block}\nUser: {user_message}\nEden:"
+    
+#     def cleanup(self):
+#         if hasattr(self, "client"):
+#             try:
+#                 self.client.close()
+#             except:
+#                 pass
 
-        def run_scheduler():
-            pass
-        def stop_scheduler():
-            pass
+#     def run_scheduler():
+#         pass
+#     def stop_scheduler():
+#         pass
 
 # Local imports
 try:
@@ -193,7 +223,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated='auto')
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Fixed user database
+
 users_db = {}
 
 def verify_password(plain_password, hashed_password):
@@ -235,6 +265,36 @@ STATIC_DIR = BASE_DIR / "static"
 
 
 # ---------------------------------------------------------------------------
+# User Database
+# ---------------------------------------------------------------------------
+class UserDatabase:
+    def __init__(self, db_path="users.db"):
+        self.db_path = db_path
+        self.init_db()
+
+    def init_db(self):
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS users (
+                            id TEXT PRIMARY KEY,
+                            username TEXT UNIQUE NOT NULL,
+                            password_hash TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+
+    def create_user(self, username: str, password: str):
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        user_id = str(uuid.uuid4())
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)",
+                (user_id, username, password_hash),
+            )
+        return user_id
+
+# ---------------------------------------------------------------------------
 # Async ChromaDB operations
 # ---------------------------------------------------------------------------
 
@@ -255,8 +315,26 @@ async def save_interaction_async(vector_store, *args, **kwargs):
 
 # Pulls Affect_State and Memory_Store classes and creates class instances in API
 affect = Affect_State()
+
 memory_store = Memory_Store()
+
 vector_store = VectorMemoryStore()
+
+# ---------------------------------------------------------------------------
+# Secure threading for multiple user functionality
+# ---------------------------------------------------------------------------
+
+class ThreadSafeMemoryStore:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._stores = {} #Separate store per session
+
+    def get_store(self, session_id: str):
+        with self._lock: #only one user at a time
+            if session_id not in self._stores:
+                self._stores[session_id] = Memory_Store()
+            return self._stores[session_id]
+
 
 # ---------------------------------------------------------------------------
 # Model & tokenizer
@@ -290,10 +368,13 @@ except Exception as e:
     class DummyGenerator:
         def __call__(self, prompt, **kwargs):
             # Simple fallback response for testing
+            base_response = "I'm currently in test mode. "
             if "kai" in prompt.lower():
-                return [{"generated_text": prompt + " Hey! What's up?"}]
+                response = base_response + "Hey! What's up?"
             else:
-                return [{"generated_text": prompt + " Hello, I'm here to listen."}]
+                response = base_response + "Hello, I'm here to listen."
+            
+            return [{"generated_text": prompt + response}]
     
     _generator = DummyGenerator()
     _tokenizer = None
@@ -331,19 +412,20 @@ class RateLimiter:
     def __init__(self, max_requests=10, window=60):
         self.max_requests = max_requests
         self.window = window
-        self.requests = defaultdict(list)
+        self.requests = defaultdict(lambda: deque())
+        
 
     def check_rate_limit(self, user_id: str):
-        now = time()
-        self.requests[user_id] = [
-            req_time for req_time in self.requests[user_id]
-            if now - req_time < self.window
-        ]
+        now = time.time()
+        user_requests = self.requests[user_id]
 
-        if len(self.requests[user_id]) >= self.max_requests:
+        while user_requests and now - user_requests[0] >= self.window:
+            user_requests.popleft()
+
+        if len(user_requests) >= self.max_requests:
             raise HTTPException(429, "Rate limit exceeded")
         
-        self.requests[user_id].append(now)
+        user_requests.append(now)
 
 rate_limiter = RateLimiter(max_requests=10, window=60)
 
