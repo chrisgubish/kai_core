@@ -28,7 +28,7 @@ import json
 import uuid
 from pydantic import BaseModel
 from pathlib import Path
-from time import time
+import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -59,7 +59,7 @@ import hashlib
 
 from collections import defaultdict
 
-import threading
+from threading import Thread, Lock
 
 from typing import List, Dict, Callable, Optional
 import os, re, torch
@@ -388,9 +388,35 @@ class ConnectionManager:
         self.user_sessions: Dict[str, str] = {}
     
     async def connect(self, websocket: WebSocket, user_id: str):
-        await websocket.accept()
-        self.active_connections[user_id] = websocket
-        self.user_sessions[user_id] = f"session_{user_id}_{int(datetime.now().timestamp())}"
+        try:
+            await websocket.accept()
+            self.active_connections[user_id] = websocket
+            
+            # Debug: Check what datetime is
+            print(f"[DEBUG] datetime type: {type(datetime)}")
+            print(f"[DEBUG] datetime.now type: {type(datetime.now)}")
+            
+            # Try creating timestamp with better error handling
+            try:
+                current_time = datetime.now()
+                timestamp = int(current_time.timestamp())
+                self.user_sessions[user_id] = f"session_{user_id}_{timestamp}"
+                print(f"[DEBUG] Created session: {self.user_sessions[user_id]}")
+            except Exception as e:
+                print(f"[DEBUG] Error creating timestamp: {e}")
+                # Fallback to simple timestamp
+                import time
+                self.user_sessions[user_id] = f"session_{user_id}_{int(time.time())}"
+                
+        except Exception as e:
+            print(f"[DEBUG] Error in connect: {e}")
+            raise
+
+
+    # async def connect(self, websocket: WebSocket, user_id: str):
+    #     await websocket.accept()
+    #     self.active_connections[user_id] = websocket
+    #     self.user_sessions[user_id] = f"session_{user_id}_{int(datetime.now().timestamp())}"
 
     def disconnect(self, user_id: str):
         if user_id in self.active_connections:

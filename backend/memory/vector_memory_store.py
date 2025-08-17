@@ -3,7 +3,8 @@ try:
 except ImportError:
     from embeddings import EmbeddingPipeline
 import chromadb
-from datetime import datetime
+from chromadb.errors import NotFoundError  # Add this import
+from datetime import datetime, timedelta, time
 from typing import List, Dict
 import json
 
@@ -12,14 +13,37 @@ class VectorMemoryStore:
         self.embedding_pipeline = EmbeddingPipeline()
         self.client = chromadb.Client()
 
-        #Handle collection creation more safely
+        # Handle collection creation more safely - catch the correct exception
         try:
             self.collection = self.client.get_collection(name="conversations")
-        except ValueError:
+            print("[VectorStore] Found existing 'conversations' collection")
+        except NotFoundError:  # Changed from ValueError to NotFoundError
             self.collection = self.client.create_collection(    
                 name="conversations",
                 metadata={"hnsw:space": "cosine"}
             )
+            print("[VectorStore] Created new 'conversations' collection")
+
+# from .embeddings import EmbeddingPipeline
+# import chromadb
+# from datetime import datetime
+# from typing import List, Dict
+# import json
+
+# class VectorMemoryStore:
+#     def __init__(self):
+#         self.embedding_pipeline = EmbeddingPipeline()
+#         self.client = chromadb.Client()
+
+#         #Handle collection creation more safely
+#         try:
+#             self.collection = self.client.get_collection(name="conversations")
+#         except ValueError:
+#             self.collection = self.client.create_collection(    
+#                 name="conversations",
+#                 metadata={"hnsw:space": "cosine"}
+#             )
+#             print("[VectoStore] Created new 'conversations' collection")
 
     # def save_interaction(self, user_msg: str, ai_response: str, emotional_data: dict, session_id):
     #     pass
