@@ -86,29 +86,37 @@ class VectorMemoryStore:
 
     
     def build_emotional_context(self, emotions: dict, affect: dict) -> str:
-        """
-        Builds human readable emotional context from emotion scores and affect vectors.
+        # """
+        # Builds human readable emotional context from emotion scores and affect vectors.
 
-        Args:
-            emotions: Dictionary of emotion names to intensity scores (0-1)
-            affect: Dictionary containing valence and arousal values (-1 to 1)
+        # Args:
+        #     emotions: Dictionary of emotion names to intensity scores (0-1)
+        #     affect: Dictionary containing valence and arousal values (-1 to 1)
 
-        Returns:
-            Formatted string describing the user's emotional state
-        """
+        # Returns:
+        #     Formatted string describing the user's emotional state
+        # """
+        """Build brief emotional context without confusing the model"""
         if not emotions:
             return ""
         
         #Find the emotion with highest intensity
         dominant_emotion = max(emotions.items(), key=lambda x: x[1])
-        context = f"User is feeling {dominant_emotion[0]} (intensity: {dominant_emotion[1]:.2f})"
+        valence = affect.get("valence", 0)
+        # context = f"User is feeling {dominant_emotion[0]} (intensity: {dominant_emotion[1]:.2f})"
+
 
         #Add valence-based mood assessment
+        dominant_emotion = max(emotions.items(), key=lambda x: x[1])
         valence = affect.get("valence", 0)
         if valence < -0.3:
-            context += "User seems to be having a difficult time."
+            return f"[User feeling {dominant_emotion[0]}, seems down]"
+            # context += "User seems to be having a difficult time."
         elif valence > 0.3:
-            context+= " User seems to be in a positive mood"
+            return f"[User feeling {dominant_emotion[0]}, seems positive]"
+        else:
+            return f"[User feeling {dominant_emotion[0]}]"
+            # context+= " User seems to be in a positive mood"
         
         #arousal information
         arousal = affect.get("arousal", 0)
@@ -173,17 +181,11 @@ class VectorMemoryStore:
     def _assemble_prompt(self, user_msg: str, recent_history: List[str], \
                          emotional_context: str, contextual_memories: List[dict]) -> str:
         """
-        Assembles a comprehensive prompt incorporating all context types.
+        FIXED: Simple Prompt assembly that doesn't confuse the model.
 
-        Args:
-            user_msg: Current user message
-            recent_history: Recent conversation messages
-            emotional_context: Emotional state description
-            contextual_memories Relevant past interactions
-
-        Returns:
-            Enhanced prompt with all available context
+        The instructional format was causing the model to generate meta-commentary instead of natural responses.
         """
+    
         prompt_parts = []
 
         #Add emotional context if available
@@ -192,20 +194,32 @@ class VectorMemoryStore:
 
         #Add relevant memories
         if contextual_memories:
-            memory_text = "Relevant Past Interactions:\n"
-            for memory in contextual_memories:
-                memory_text += f"• {memory['content'][:100]}...\n"
-            prompt_parts.append(memory_text)
+            for memory in contextual_memories[:2]: #Limit to prevent confusion
+                #Extra just the conversation, not metadata
+                user_part = memory.get('user_message', '')
+                ai_part = memory.get('ai_response', '')
+                if user_part and ai_part:
+                    prompt_parts.append(f"User: {user_part}")
+                    prompt_parts.append(f"Kai: {ai_part}")
+
+            # Edited out to attempt to troublshoot AI confusion response issue
+            # memory_text = "Relevant Past Interactions:\n"
+            # for memory in contextual_memories:
+            #     memory_text += f"• {memory['content'][:100]}...\n"
+            # prompt_parts.append(memory_text)
 
         #Add recent history
         if recent_history:
-            history_text = "Recent conversation:\n" + "\n".join(recent_history[-3:])
-            prompt_parts.append(history_text)
+            prompt_parts.extend(recent_history[-3:]) #Last three exchanges
+            #Edited out to attempt to troubleshoot AI confusion response issue
+            #  history_text = "Recent conversation:\n" + "\n".join(recent_history[-3:])
+            # prompt_parts.append(history_text)
 
         #Add current message
-        prompt_parts.append(f"Current User Message: {user_msg}")
+        prompt_parts.append(f"User: {user_msg}")
+        prompt_parts.append("Kai:") #Set up for kai response
 
-        return "\n\n".join(prompt_parts)
+        return "\n".join(prompt_parts)
 
 
     def get_emotional_patterns(self, session_id: str, emotion_type: str = None, limit: int = 5) -> List[dict]:

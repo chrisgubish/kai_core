@@ -1,3 +1,350 @@
+# # journal_platform.py
+# """
+# Simplified emotional journal platform using existing codebase components.
+# Core functionality: Journal entry -> Emotional analysis -> Dashboard visualization
+# """
+
+# from fastapi import FastAPI, Request, Depends, HTTPException, status
+# from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+# from fastapi.middleware.cors import CORSMiddleware
+# from fastapi.responses import HTMLResponse
+# from fastapi.staticfiles import StaticFiles
+# from pydantic import BaseModel
+# from datetime import datetime, timedelta
+# from typing import List, Dict, Optional
+# import json
+# import uuid
+# from pathlib import Path
+
+# # Reuse existing components
+# from backend.inference.affect import Affect_State
+# from backend.memory.memory_store import Memory_Store
+# from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+# # Authentication components (reused from persona_api.py)
+# from passlib.context import CryptContext
+# from jose import JWTError, jwt
+# import os
+# from dotenv import load_dotenv
+
+# load_dotenv()
+# SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+# ALGORITHM = "HS256"
+# ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated='auto')
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# app = FastAPI(title="Emotional Journal Platform")
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+# # Initialize components
+# affect_analyzer = Affect_State()
+# memory_store = Memory_Store()
+# sentiment_analyzer = SentimentIntensityAnalyzer()
+# users_db = {}
+
+# # Pydantic models
+# class JournalEntry(BaseModel):
+#     content: str
+#     title: Optional[str] = None
+
+# class User(BaseModel):
+#     username: str
+#     email: Optional[str] = None
+
+# class UserCreate(BaseModel):
+#     username: str
+#     password: str
+#     email: Optional[str] = None
+
+# # Authentication functions (reused)
+# def verify_password(plain_password, hashed_password):
+#     return pwd_context.verify(plain_password, hashed_password)
+
+# def get_password_hash(password):
+#     return pwd_context.hash(password)
+
+# def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+#     to_encode = data.copy()
+#     if expires_delta:
+#         expire = datetime.utcnow() + expires_delta
+#     else:
+#         expire = datetime.utcnow() + timedelta(minutes=15)
+#     to_encode.update({"exp": expire})
+#     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+#     return encoded_jwt
+
+# async def get_current_user(token: str = Depends(oauth2_scheme)):
+#     credentials_exception = HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Could not validate credentials",
+#         headers={"WWW-Authenticate": "Bearer"},
+#     )
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+#         username: str = payload.get("sub")
+#         if username is None:
+#             raise credentials_exception
+#     except JWTError:
+#         raise credentials_exception
+    
+#     user = users_db.get(username)
+#     if user is None:
+#         raise credentials_exception
+#     return user
+
+# # Simplified emotion processing
+# class SimpleEmotionProcessor:
+#     def __init__(self):
+#         self.sentiment_analyzer = SentimentIntensityAnalyzer()
+        
+#     def analyze_journal_entry(self, text: str) -> Dict:
+#         """Simplified emotional analysis for user-friendly display"""
+#         # VADER sentiment analysis
+#         sentiment_scores = self.sentiment_analyzer.polarity_scores(text)
+        
+#         # Simplified emotion categories
+#         primary_emotion = self._get_primary_emotion(sentiment_scores, text)
+        
+#         # Emotional intensity (0-1 scale)
+#         intensity = abs(sentiment_scores['compound'])
+        
+#         return {
+#             'primary_emotion': primary_emotion,
+#             'intensity': round(intensity, 2),
+#             'sentiment_scores': sentiment_scores,
+#             'mood_category': self._get_mood_category(sentiment_scores['compound']),
+#             'analysis_timestamp': datetime.utcnow().isoformat()
+#         }
+    
+#     def _get_primary_emotion(self, sentiment_scores: Dict, text: str) -> str:
+#         """Determine primary emotion from text analysis"""
+#         text_lower = text.lower()
+        
+#         # Keyword-based emotion detection for simplicity
+#         emotion_keywords = {
+#             'happy': ['happy', 'joy', 'excited', 'great', 'awesome', 'wonderful', 'love', 'amazing'],
+#             'sad': ['sad', 'depressed', 'down', 'upset', 'hurt', 'cry', 'lonely', 'grief'],
+#             'mad': ['angry', 'mad', 'furious', 'annoyed', 'frustrated', 'irritated', 'rage'],
+#             'anxious': ['worried', 'anxious', 'nervous', 'scared', 'fear', 'stress', 'panic'],
+#             'calm': ['calm', 'peaceful', 'relaxed', 'content', 'serene', 'tranquil']
+#         }
+        
+#         # Count keyword matches
+#         emotion_scores = {}
+#         for emotion, keywords in emotion_keywords.items():
+#             score = sum(1 for keyword in keywords if keyword in text_lower)
+#             if score > 0:
+#                 emotion_scores[emotion] = score
+        
+#         # If keyword matching found emotions, use highest scoring
+#         if emotion_scores:
+#             return max(emotion_scores, key=emotion_scores.get)
+        
+#         # Fallback to sentiment-based categorization
+#         compound = sentiment_scores['compound']
+#         if compound >= 0.3:
+#             return 'happy'
+#         elif compound <= -0.3:
+#             return 'sad'
+#         else:
+#             return 'neutral'
+    
+#     def _get_mood_category(self, compound_score: float) -> str:
+#         """Convert compound score to simple mood category"""
+#         if compound_score >= 0.5:
+#             return 'very_positive'
+#         elif compound_score >= 0.1:
+#             return 'positive'
+#         elif compound_score >= -0.1:
+#             return 'neutral'
+#         elif compound_score >= -0.5:
+#             return 'negative'
+#         else:
+#             return 'very_negative'
+
+# emotion_processor = SimpleEmotionProcessor()
+
+# # Authentication endpoints
+# @app.post("/register")
+# async def register(user_data: UserCreate):
+#     if user_data.username in users_db:
+#         raise HTTPException(status_code=400, detail="Username already registered")
+    
+#     hashed_password = get_password_hash(user_data.password)
+#     user_id = str(uuid.uuid4())
+#     users_db[user_data.username] = {
+#         "id": user_id,
+#         "username": user_data.username,
+#         "email": user_data.email,
+#         "hashed_password": hashed_password,
+#         "created_at": datetime.utcnow().isoformat()
+#     }
+#     return {"message": "User registered successfully", "user_id": user_id}
+
+# @app.post("/token")
+# async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+#     user = users_db.get(form_data.username)
+#     if not user or not verify_password(form_data.password, user["hashed_password"]):
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Incorrect username or password",
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
+    
+#     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = create_access_token(
+#         data={"sub": user["username"]}, expires_delta=access_token_expires
+#     )
+#     return {
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "user_id": user["id"]
+#     }
+
+# # Journal entry endpoint
+# @app.post("/journal/entry")
+# async def create_journal_entry(entry: JournalEntry, current_user: dict = Depends(get_current_user)):
+#     """Process journal entry and return emotional analysis"""
+    
+#     # Analyze emotional content
+#     emotional_analysis = emotion_processor.analyze_journal_entry(entry.content)
+    
+#     # Store entry with analysis
+#     session_id = f"user_{current_user['id']}"
+#     memory_store.save(
+#         speaker="user",
+#         message=entry.content,
+#         emotion=emotional_analysis['primary_emotion'],
+#         tags=[
+#             f"emotion:{emotional_analysis['primary_emotion']}",
+#             f"intensity:{emotional_analysis['intensity']}",
+#             f"mood:{emotional_analysis['mood_category']}",
+#             "journal_entry"
+#         ],
+#         session_id=session_id
+#     )
+    
+#     return {
+#         "status": "success",
+#         "analysis": emotional_analysis,
+#         "entry_id": str(uuid.uuid4()),
+#         "timestamp": datetime.utcnow().isoformat()
+#     }
+
+# # Dashboard data endpoint
+# @app.get("/dashboard/overview")
+# async def get_dashboard_overview(current_user: dict = Depends(get_current_user)):
+#     """Get emotional analysis overview for dashboard"""
+#     session_id = f"user_{current_user['id']}"
+    
+#     # Get recent entries (last 30 days)
+#     recent_entries = memory_store.get_recent(
+#         limit=100, 
+#         session_id=session_id,
+#         tag_filter=["journal_entry"]
+#     )
+    
+#     if not recent_entries:
+#         return {"message": "No journal entries found"}
+    
+#     # Process entries for dashboard
+#     emotion_counts = {}
+#     mood_trends = []
+#     daily_summaries = {}
+    
+#     for entry in recent_entries:
+#         # Count emotions
+#         for tag in entry.get('tags', []):
+#             if tag.startswith('emotion:'):
+#                 emotion = tag.split(':')[1]
+#                 emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+        
+#         # Daily summaries
+#         entry_date = entry['timestamp'][:10]  # YYYY-MM-DD
+#         if entry_date not in daily_summaries:
+#             daily_summaries[entry_date] = {
+#                 'entries': 0,
+#                 'emotions': [],
+#                 'avg_intensity': 0
+#             }
+        
+#         daily_summaries[entry_date]['entries'] += 1
+        
+#         # Extract emotion and intensity from tags
+#         for tag in entry.get('tags', []):
+#             if tag.startswith('emotion:'):
+#                 daily_summaries[entry_date]['emotions'].append(tag.split(':')[1])
+#             elif tag.startswith('intensity:'):
+#                 intensity = float(tag.split(':')[1])
+#                 current_avg = daily_summaries[entry_date]['avg_intensity']
+#                 count = daily_summaries[entry_date]['entries']
+#                 daily_summaries[entry_date]['avg_intensity'] = (current_avg * (count-1) + intensity) / count
+    
+#     return {
+#         "total_entries": len(recent_entries),
+#         "emotion_breakdown": emotion_counts,
+#         "daily_summaries": daily_summaries,
+#         "most_common_emotion": max(emotion_counts, key=emotion_counts.get) if emotion_counts else "neutral",
+#         "analysis_period": "last_30_days"
+#     }
+
+# # Topic analysis endpoint
+# @app.get("/dashboard/topics")
+# async def get_topic_analysis(current_user: dict = Depends(get_current_user)):
+#     """Analyze emotional patterns around specific topics/keywords"""
+#     session_id = f"user_{current_user['id']}"
+    
+#     entries = memory_store.get_recent(
+#         limit=100,
+#         session_id=session_id,
+#         tag_filter=["journal_entry"]
+#     )
+    
+#     # Simple keyword-based topic extraction
+#     topic_emotions = {}
+#     common_topics = ['work', 'family', 'friends', 'relationship', 'health', 'money', 'school']
+    
+#     for entry in entries:
+#         text = entry['message'].lower()
+#         entry_emotion = entry.get('emotion', 'neutral')
+        
+#         for topic in common_topics:
+#             if topic in text:
+#                 if topic not in topic_emotions:
+#                     topic_emotions[topic] = {}
+#                 topic_emotions[topic][entry_emotion] = topic_emotions[topic].get(entry_emotion, 0) + 1
+    
+#     return {
+#         "topic_emotional_patterns": topic_emotions,
+#         "analysis_note": "Based on keyword detection in journal entries"
+#     }
+
+# # Health check and info
+# @app.get("/")
+# def root():
+#     return {"message": "Emotional Journal Platform API", "version": "1.0", "status": "active"}
+
+# @app.get("/health")
+# def health_check():
+#     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+# # Static file serving for dashboard frontend
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
 # persona_api.py
 """FastAPI service for multi-persona emotional AI (Eden & Kai).
 
@@ -724,8 +1071,43 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     reply = re.sub(r'\s+', ' ', reply)
                     # Remove any leftover conversation markers
                     reply = re.sub(r'^(Kai|Eden|User|You):\s*', '', reply, flags=re.IGNORECASE)
+                    meta_patterns = [
+                        r"Possible AI Response:.*?(?=\n|$)",
+                        r"Based on.*?(?=\n|$)",
+                        r"\[DEBUG\].*?(?=\n|$)",
+                        r"AI could respond.*?(?=\n|$)",
+                    ]
 
+                    for pattern in meta_patterns:
+                        reply = re.sub(pattern, "", reply, flags=re.IGNORECASE).strip()
+
+                    reply = reply.replace('\n', ' ').strip()
+                    reply = re.sub(r'\s+', ' ', reply)
+                    reply = re.sub(r'^(Kai|Eden|User|You):\s*', '', reply, flags=re.IGNORECASE)
+
+                    debug_indicators = [
+                        "possible ai response",
+                        "based on user's recent",
+                        "the ai could respond", 
+                        "[debug]",
+                        "conversation and message"
+                    ]
+
+                    if any(indicator in reply.lower() for indicator in debug_indicators):
+                        print(f"[ERROR] Debug text detected in reply: {reply}")
+                        error_response = {
+                            "type": "error",
+                            "content": "Response contained debug text. Please try again.",
+                            "persona": persona,
+                        }
+                        await websocket.send_text(json.dumps(error_response))
+                        continue
+                print(f"[DEBUG] FINAL PROMPT BEING SENT TO MODE:")
+                print(f"'{final_prompt}'")
+                print(f"[DEBUG] END OF PROMPT")
                 print(f"[DEBUG] Final cleaned reply: '{reply}'")
+
+
 
             except Exception as exc:
                 print(f"[ERROR] Generation failed: {str(exc)}")
@@ -746,6 +1128,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 }
                 await websocket.send_text(json.dumps(error_response))
                 continue
+
+            if speaker == "eden":
+                reply = friendify(reply)
 
             print(f"[DEBUG] SUCCESS - Final reply: '{reply}'")
 
