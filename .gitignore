@@ -62,3 +62,31 @@ checkpoints/
 # === App runtime data (don’t version these) ===
 eden_memory.json
 eden_self_log.json
+
+# From repo root
+# 1) Ensure .gitignore has the right rules
+@'
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Bb]uild*/
+[Bb]uilds*/
+[Ll]ogs/
+[Mm]emoryCaptures/
+*.unitypackage
+'@ | Out-File -Encoding utf8 .gitignore
+
+# 2) Stop tracking existing cached folders in the index
+git rm -r --cached unity-game/Library
+git add .gitignore
+git commit -m "Ignore Unity/Next.js caches; stop tracking unity-game/Library"
+unity-game/
+unity-game/
