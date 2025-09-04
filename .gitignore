@@ -90,3 +90,4 @@ git add .gitignore
 git commit -m "Ignore Unity/Next.js caches; stop tracking unity-game/Library"
 unity-game/
 unity-game/
+unity-game/
