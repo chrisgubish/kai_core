@@ -876,6 +876,58 @@ async def get_model_status(current_user: dict = Depends(get_current_user)):
         "timestamp": datetime.utcnow().isoformat()
     }
 
+@app.get("/journal/entries")
+async def get_journal_entries(
+    limit: int = 20, 
+    offset: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get user's journal entries with emotional analysis"""
+    session_id = f"user_{current_user['id']}"
+    
+    all_entries = memory_store.get_recent(
+        limit=1000,
+        session_id=session_id,
+        tag_filter=["journal_entry"]
+    )
+    
+    processed_entries = []
+    for entry in all_entries:
+        analysis_data = {
+            'emotion': entry.get('emotion', 'neutral'),
+            'intensity': 0.5,
+            'confidence': 0.5,
+            'mood_category': 'neutral'
+        }
+        
+        for tag in entry.get('tags', []):
+            if tag.startswith('intensity:'):
+                analysis_data['intensity'] = float(tag.split(':')[1])
+            elif tag.startswith('confidence:'):
+                analysis_data['confidence'] = float(tag.split(':')[1])
+            elif tag.startswith('mood:'):
+                analysis_data['mood_category'] = tag.split(':')[1]
+        
+        processed_entry = {
+            'content': entry['message'],
+            'timestamp': entry['timestamp'],
+            'analysis': analysis_data,
+            'date_formatted': datetime.fromisoformat(entry['timestamp'].replace('Z', '+00:00')).strftime('%B %d, %Y at %I:%M %p')
+        }
+        processed_entries.append(processed_entry)
+    
+    total_entries = len(processed_entries)
+    paginated_entries = processed_entries[offset:offset + limit]
+    
+    return {
+        'entries': paginated_entries,
+        'total': total_entries,
+        'limit': limit,
+        'offset': offset,
+        'has_more': offset + limit < total_entries
+    }
+
+
 # Health check and info endpoints
 @app.get("/")
 def root():
