@@ -1,0 +1,11 @@
+﻿.env
+*.env
+__pycache__/
+*.py[cod]
+*.meta
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+.vscode/
+.DS_Store
+~$*
