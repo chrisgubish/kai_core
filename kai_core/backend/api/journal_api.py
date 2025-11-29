@@ -14,6 +14,7 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from collections import Counter
 import logging
+import re
 
 # Transformer models
 from transformers import pipeline
@@ -204,7 +205,7 @@ class EmotionAnalyzer:
             logger.info(f"Model loaded! Emotions: {self.native_emotions}")
             
         except Exception as e:
-            print(f"Failed to load emotion model: {e}")
+            print(f"Failed to load emotion model: {e}", exc_info=True)
             self.last_error = str(e)
             # Set default emotions if model fails to load (j-hartmann model emotions)
             self.native_emotions = ['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise']
@@ -504,12 +505,56 @@ async def register(
     Register new user account
     """
     #Validate input
-    if len(user_data.password) < 6:
+    if not user_data.username or len(user_data.username) < 3:
         raise HTTPException(
             status_code=400,
-            detail="Password must be at least 6 characters"
+            detail="Username must be at least 3 characters"
         )
     
+    if len(user_data.username) > 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Username cannot exceed 50 characters"
+        )
+    
+    #Validate username format (alphanumeric + underscore/hyphen only. Hardening against SQL injection)
+    username_pattern = r'^[a-zA-Z0-9_-]+$'
+    if not re.match(username_pattern, user_data.username):
+        raise HTTPException(
+            status_code=400,
+            detail="Username can only contain letters, numbers, underscore, and hyphen"
+        )
+
+
+    if len(user_data.password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters"
+        )
+
+    # Validate password complexity
+    if not any(c.isalpha() for c in user_data.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one letter"
+        )
+    
+    if not any(c.isdigit() for c in user_data.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one number"
+        )
+    
+    #Validate email format (if provided)
+    if user_data.email:
+        if user_data.email:
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, user_data.email):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid email format"
+                )    
+            
     # Check if username already exists
     existing_user = db.query(DBUser).filter(
         DBUser.username == user_data.username
@@ -520,7 +565,7 @@ async def register(
             status_code=400,
             detail="Username already registered"
         )
-    
+
     #Check if email already exists (if provided)
     if user_data.email:
         existing_email = db.query(DBUser).filter(
@@ -532,7 +577,7 @@ async def register(
                 status_code=400,
                 detail="Email already registered"
             )
-        
+
     #Hash password
     password_hash = get_password_hash(user_data.password)
 
