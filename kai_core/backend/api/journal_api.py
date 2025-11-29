@@ -24,6 +24,11 @@ from jose import JWTError, jwt, ExpiredSignatureError
 import os
 from dotenv import load_dotenv
 
+#Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 #database components (connected to FastAPI server)
 from backend.models.database import get_db, User as DBUser, JournalEntry as DBJournalEntry
 from sqlalchemy.orm import Session
@@ -98,6 +103,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
 
 # Pydantic models
 class JournalEntryInput(BaseModel):
@@ -473,6 +484,7 @@ async def health_check():
 # -----------------------------------------------------------------------------
 
 @app.post("/register")
+@limiter.limit("5/hour")
 async def register(
     user_data: UserCreate,
     db: Session = Depends(get_db)
@@ -533,6 +545,7 @@ async def register(
     }
 
 @app.post("/token")
+@limiter.limit("10/minute")
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -576,6 +589,7 @@ async def login_for_access_token(
 # -----------------------------------------------------------------------------
 
 @app.post("/journal/entry")
+@limiter.limit("30/minute")
 async def create_journal_entry(
     entry: JournalEntryInput, 
     current_user: DBUser = Depends(get_current_user),
@@ -641,6 +655,7 @@ async def create_journal_entry(
     }
 
 @app.get("/journal/entries")
+@limiter.limit("60/minute")
 async def get_journal_entries(
     limit: int = 20,
     offset: int = 0,
@@ -689,6 +704,7 @@ async def get_journal_entries(
     return formatted_entries
 
 @app.get("/unity/weather-state")
+@limiter.limit("120/minute")
 async def get_weather_state(
     current_user : DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -751,6 +767,7 @@ async def get_weather_state(
 
 
 @app.get("/journal/stats")
+@limiter.limit("30/minute")
 async def get_journal_stats(
     current_user: DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
