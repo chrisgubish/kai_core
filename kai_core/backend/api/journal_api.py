@@ -466,18 +466,29 @@ async def root():
     }
 
 @app.get("/health")
-async def health_check():
+@limiter.limit("10/minute")
+async def health_check(db: Session = Depends(get_db)):
     """
     Health check with database connectivity test
     """
-    return {
-        "status": "healthy", 
-        "model_available": emotion_processor.model is not None,
-        "model_name": emotion_processor.model_name,
-        "native_emotions_loaded": len(emotion_processor.native_emotions),
-        "last_error": emotion_processor.last_error,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    try:
+        db.Execute("SELECT 1")
+
+        model_status = "healthy" if emotion_processor else "unhealthy"
+
+
+        return {
+            "status": "healthy", 
+            "model_available": emotion_processor.model is not None,
+            "model_name": emotion_processor.model_name,
+            "native_emotions_loaded": len(emotion_processor.native_emotions),
+            "last_error": emotion_processor.last_error,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Service unhealthy")
 
 # -----------------------------------------------------------------------------
 # Authentication Endpoints
