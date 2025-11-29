@@ -34,6 +34,7 @@ from slowapi.errors import RateLimitExceeded
 #database components (connected to FastAPI server)
 from backend.models.database import get_db, User as DBUser, JournalEntry as DBJournalEntry
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 #Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -486,12 +487,12 @@ async def root():
 
 @app.get("/health")
 @limiter.limit("10/minute")
-async def health_check(db: Session = Depends(get_db)):
+async def health_check(request: Request, db: Session = Depends(get_db)):
     """
     Health check with database connectivity test
     """
     try:
-        db.Execute("SELECT 1")
+        db.Execute(text("SELECT 1"))
 
         model_status = "healthy" if emotion_processor else "unhealthy"
 
@@ -516,8 +517,9 @@ async def health_check(db: Session = Depends(get_db)):
 @app.post("/register")
 @limiter.limit("5/hour")
 async def register(
+    request: Request,
     user_data: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Register new user account
@@ -621,6 +623,7 @@ async def register(
 @app.post("/token")
 @limiter.limit("10/minute")
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -665,6 +668,7 @@ async def login_for_access_token(
 @app.post("/journal/entry")
 @limiter.limit("30/minute")
 async def create_journal_entry(
+    request: Request,
     entry: JournalEntryInput, 
     current_user: DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -731,6 +735,7 @@ async def create_journal_entry(
 @app.get("/journal/entries")
 @limiter.limit("60/minute")
 async def get_journal_entries(
+    request: Request,
     limit: int = 20,
     offset: int = 0,
     current_user: DBUser = Depends(get_current_user),
@@ -780,6 +785,7 @@ async def get_journal_entries(
 @app.get("/unity/weather-state")
 @limiter.limit("120/minute")
 async def get_weather_state(
+    request: Request,
     current_user : DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -843,6 +849,7 @@ async def get_weather_state(
 @app.get("/journal/stats")
 @limiter.limit("30/minute")
 async def get_journal_stats(
+    request: Request,
     current_user: DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
