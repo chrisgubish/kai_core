@@ -5,7 +5,7 @@ Core functionality: Gaming platform -> Journal entry -> DistilRoBERTa emotional 
 -> emotion-based gameplay using user emotional sentiment from entries
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from pathlib import Path
 from collections import Counter
 import logging
 import re
+import time
 
 # Transformer models
 from transformers import pipeline
@@ -104,6 +105,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests with timing"""
+    start_time = time.time()
+
+    response = await call_next(request)
+
+    process_time = time.time() - start_time
+    logger.info(
+        f"{request.method} {request.url.path} "
+        f"completed in {process_time:.2f}s "
+        f"with status {response.status_code}"
+    )
+
+    return response
+
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
